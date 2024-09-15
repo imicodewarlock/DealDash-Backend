@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Category;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Symfony\Component\HttpFoundation\Response;
 
 class CategoryController extends Controller
 {
@@ -15,9 +16,8 @@ class CategoryController extends Controller
      */
     public function index()
     {
-        // $categories = Category::withoutTrashed()->get();
-        // return response()->json($categories);
-        return Category::all(); // Returns all stores except soft-deleted ones
+        $categories = Category::all();
+        return response()->json($categories, Response::HTTP_OK);
     }
 
     /**
@@ -33,7 +33,7 @@ class CategoryController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return response()->json($validator->errors(), 400);
+            return response()->json($validator->errors(), Response::HTTP_BAD_REQUEST);
         }
 
         $imageUrl = null;
@@ -58,7 +58,7 @@ class CategoryController extends Controller
             'image' => $imageUrl,
         ]);
 
-        return response()->json($category, 201);
+        return response()->json($category, Response::HTTP_CREATED);
     }
 
     /**
@@ -66,9 +66,15 @@ class CategoryController extends Controller
      *
      * Display a specific category
      */
-    public function show(Category $category)
+    public function show($id)
     {
-        return $category;
+        $category = Category::find($id);
+
+        if ($category) {
+            return response()->json($category, Response::HTTP_OK);
+        } else {
+            return response()->json(['message' => 'Category not found'], Response::HTTP_NOT_FOUND);
+        }
     }
 
 
@@ -77,45 +83,52 @@ class CategoryController extends Controller
      *
      * Update a specific category
      */
-    public function update(Request $request, Category $category)
+    public function update(Request $request, $id)
     {
-        $validator = Validator::make($request->all(), [
-            'name' => 'required|string|max:255',
-            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
-        ]);
+        $category = Category::find($id);
 
-        if ($validator->fails()) {
-            return response()->json($validator->errors(), 400);
+        if ($category) {
+            $validator = Validator::make($request->all(), [
+                'name' => 'required|string|max:255',
+                'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json($validator->errors(), Response::HTTP_BAD_REQUEST);
+            }
+
+            $category->name = $request->name ?? $category->name;
+
+            if ($request->hasFile('image')) {
+                // first unlink the old avatar
+                $parsedUrl = parse_url($category->image);
+                $oldImage = basename($parsedUrl['path']);
+                unlink(public_path('img/categories') . '/' . $oldImage);
+
+                // Next Update the avatar
+                $image = $request->file('image');
+
+                // Generate a unique filename
+                $imageName = time() . '_' . uniqid() . '.' . $image->getClientOriginalExtension();
+
+                // Define the path where the image will be stored
+                $destinationPath = public_path('img/categories');
+
+                // Move the image to the destination path
+                $image->move($destinationPath, $imageName);
+
+                // Generate the full URL to the image
+                $imageUrl = config('app.url') . '/img/categories/' . $imageName;
+
+                $category->image = $imageUrl ?? $category->image;
+            }
+
+            $category->update();
+
+            return response()->json($category, Response::HTTP_OK);
+        } else {
+            return response()->json(['message' => 'Category not found'], Response::HTTP_NOT_FOUND);
         }
-
-        $category->name = $request->name;
-
-        if ($request->hasFile('image')) {
-            // first unlink the old avatar
-            $parsedUrl = parse_url($category->image);
-            $oldPicture = basename($parsedUrl['path']);
-            unlink(public_path('img/categories') . '/' . $oldPicture);
-
-            // Next Update the avatar
-            $image = $request->file('image');
-
-            // Generate a unique filename
-            $imageName = time() . '_' . uniqid() . '.' . $image->getClientOriginalExtension();
-
-            // Define the path where the image will be stored
-            $destinationPath = public_path('img/categories');
-
-            // Move the image to the destination path
-            $image->move($destinationPath, $imageName);
-
-            // Generate the full URL to the image
-            $imageUrl = config('app.url') . '/img/categories/' . $imageName;
-
-            $category->image = $imageUrl;
-        }
-
-        $category->update();
-        return response()->json($category, 200);
     }
 
     /**
@@ -123,10 +136,17 @@ class CategoryController extends Controller
      *
      * Soft delete a specific store
      */
-    public function destroy(Category $category)
+    public function destroy($id)
     {
-        $category->delete();
-        return response()->json(["message" => 'Category disabled successfully.'], 204);
+        $category = Category::withoutTrashed()->find($id);
+
+        if ($category) {
+            $category->delete();
+
+            return response()->json(['message' => 'Category disabled successfully'], Response::HTTP_OK); // or 204
+        } else {
+            return response()->json(['message' => 'Category not found'], Response::HTTP_NOT_FOUND);
+        }
     }
 
     /**
@@ -137,7 +157,7 @@ class CategoryController extends Controller
     public function trashed()
     {
         $categories = Category::onlyTrashed()->get();
-        return response()->json($categories);
+        return response()->json($categories, Response::HTTP_OK);
     }
 
     /**
@@ -147,9 +167,14 @@ class CategoryController extends Controller
      */
     public function restore($id)
     {
-        $category = Category::withTrashed()->findOrFail($id);
-        $category->restore();
-        return response()->json(['message' => 'Category restored successfully']);
+        $category = Category::onlyTrashed()->find($id);
+
+        if ($category) {
+            $category->restore();
+            return response()->json(['message' => 'Category restored successfully'], Response::HTTP_OK);
+        } else {
+            return response()->json(['message' => 'Category not found'], Response::HTTP_NOT_FOUND);
+        }
     }
 
     /**
@@ -159,8 +184,20 @@ class CategoryController extends Controller
      */
     public function forceDelete($id)
     {
-        $category = Category::onlyTrashed()->findOrFail($id);
-        $category->forceDelete();
-        return response()->json(null, 204);
+        $category = Category::onlyTrashed()->find($id);
+
+        if ($category) {
+            if ($category->image) {
+                $parsedUrl = parse_url($category->image);
+                $oldImage = basename($parsedUrl['path']);
+                unlink(public_path('img/categories') . '/' . $oldImage);
+            }
+
+            $category->forceDelete();
+
+            return response()->json(['message' => 'Category deleted permanently.'], Response::HTTP_OK);
+        } else {
+            return response()->json(['message' => 'Category not found'], Response::HTTP_NOT_FOUND);
+        }
     }
 }

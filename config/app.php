@@ -17,6 +17,8 @@ return [
 
     'jwt_secret' => env('JWT_SECRET'),
 
+    'google_maps_api_key' => env('GOOGLE_MAPS_API_KEY'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Environment

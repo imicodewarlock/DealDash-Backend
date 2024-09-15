@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use App\Services\JWTService;
+use Symfony\Component\HttpFoundation\Response;
 
 class AuthController extends Controller
 {
@@ -25,20 +26,13 @@ class AuthController extends Controller
             'email' => 'required|string|email|max:255|unique:users',
             'phone' => 'required|unique:users|numeric',
             'password' => 'required|string|min:8',
-            //'role' => 'nullable|string',
             'avatar' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
         ]);
 
         if ($validator->fails()) {
-            return response()->json($validator->errors(), 400);
+            return response()->json($validator->errors(), Response::HTTP_BAD_REQUEST);
         }
 
-        // $avatarPath = null;
-        // if ($request->hasFile('avatar')) {
-        //     $avatar = $request->file('avatar');
-        //     $fileName = time() . '_' . $avatar->getClientOriginalName();
-        //     $avatarPath = $avatar->storeAs('/images/avatars', $fileName, 'public');
-        // }
         $avatarUrl = null;
         if ($request->hasFile('avatar')) {
             $avatar = $request->file('avatar');
@@ -61,15 +55,10 @@ class AuthController extends Controller
             'email' => $request->email,
             'phone' => $request->phone,
             'password' => Hash::make($request->password),
-            //'role' => $request->role,
             'avatar' => $avatarUrl
         ]);
 
         $token = $this->jwtService->createToken($user);
-
-        // Update the user's remember_token field in the database
-        // $user->remember_token = $token->toString();
-        // $user->save();
 
         return response()->json([
             'user' => $user,
@@ -85,20 +74,16 @@ class AuthController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return response()->json($validator->errors(), 400);
+            return response()->json($validator->errors(), Response::HTTP_BAD_REQUEST);
         }
 
         $user = User::where('email', $request->email)->first();
 
         if (!$user || !Hash::check($request->password, $user->password)) {
-            return response()->json(['message' => 'Invalid credentials'], 401);
+            return response()->json(['message' => 'Invalid credentials'], Response::HTTP_UNAUTHORIZED);
         }
 
         $token = $this->jwtService->createToken($user);
-
-        // Update the user's remember_token field in the database
-        // $user->remember_token = $token->toString();
-        // $user->save();
 
         return response()->json([
             'user' => $user,
@@ -114,6 +99,7 @@ class AuthController extends Controller
         RevokedAccessToken::create([
             'token' => $token,
         ]);
+
         return response()->json(['message' => 'Successfully logged out']);
     }
 }

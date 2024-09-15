@@ -17,7 +17,8 @@ class UserController extends Controller
      */
     public function index()
     {
-        return User::all();
+        $users = User::all();
+        return response()->json($users, Response::HTTP_OK);
     }
 
     /**
@@ -37,7 +38,7 @@ class UserController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return response()->json($validator->errors(), 400);
+            return response()->json($validator->errors(), Response::HTTP_BAD_REQUEST);
         }
 
         $avatarUrl = null;
@@ -74,9 +75,15 @@ class UserController extends Controller
      *
      * Display a specific user
      */
-    public function show(User $user)
+    public function show($id)
     {
-        return $user;
+        $user = User::find($id);
+
+        if ($user) {
+            return response()->json($user, Response::HTTP_OK);
+        } else {
+            return response()->json(['message' => 'User not found'], Response::HTTP_NOT_FOUND);
+        }
     }
 
     /**
@@ -84,72 +91,80 @@ class UserController extends Controller
      *
      * Update a specific user
      */
-    public function update(Request $request, User $user)
+    public function update(Request $request, $id)
     {
-        // $user = User::findOrFail($id);
-        // dd($request->name);
-        $validator = Validator::make($request->all(), [
-            'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users,email,' . $user->id,
-            'phone' => 'required|numeric|unique:users,phone,' . $user->id,
-            'password' => 'required|string|min:8',
-            'role' => 'required|string',
-            'avatar' => 'required|image|mimes:jpeg,png,jpg,gif|max:2048',
-        ]);
+        $user = User::find($id);
 
-        if ($validator->fails()) {
-            return response()->json($validator->errors(), 400);
+        if ($user) {
+            $validator = Validator::make($request->all(), [
+                'name' => 'required|string|max:255',
+                'email' => 'required|string|email|max:255|unique:users,email,' . $user->id,
+                'phone' => 'required|numeric|unique:users,phone,' . $user->id,
+                'password' => 'required|string|min:8',
+                'role' => 'required|string',
+                'avatar' => 'required|image|mimes:jpeg,png,jpg,gif|max:2048',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json($validator->errors(), Response::HTTP_BAD_REQUEST);
+            }
+
+            $user->name = $request->name ?? $user->name;
+            $user->email = $request->email ?? $user->email;
+            $user->phone = $request->name ?? $user->phone;
+            $user->password = Hash::make($request->password) ?? $user->password;
+            $user->role = $request->role ?? $user->role;
+
+            if ($request->hasFile('avatar')) {
+                // first unlink the old avatar if exists
+                if ($user->avatar) {
+                    $parsedUrl = parse_url($user->avatar);
+                    $oldAvatar = basename($parsedUrl['path']);
+                    unlink(public_path('img/avatars') . '/' . $oldAvatar);
+                }
+
+                // Next Update the avatar
+                $avatar = $request->file('avatar');
+
+                // Generate a unique filename
+                $avatarName = time() . '_' . uniqid() . '.' . $avatar->getClientOriginalExtension();
+
+                // Define the path where the image will be stored
+                $destinationPath = public_path('img/avatars');
+
+                // Move the image to the destination path
+                $avatar->move($destinationPath, $avatarName);
+
+                // Generate the full URL to the image
+                $avatarUrl = config('app.url') . '/img/avatars/' . $avatarName;
+
+                $user->avatar = $avatarUrl ?? $user->avatar;
+            }
+
+            $user->update();
+
+            return response()->json($user, Response::HTTP_OK);
+        } else {
+            return response()->json(['message' => 'User not found'], Response::HTTP_NOT_FOUND);
         }
-
-        $user->name = $request->name;
-        $user->email = $request->email;
-        $user->phone = $request->name;
-
-        if ($request->password != null) {
-            $user->password = Hash::make($request->password);
-        }
-
-        $user->role = $request->role;
-
-        if ($request->hasFile('avatar')) {
-            // first unlink the old avatar
-            $parsedUrl = parse_url($user->avatar);
-            $oldAvatar = basename($parsedUrl['path']);
-            unlink(public_path('img/avatars') . '/' . $oldAvatar);
-
-            // Next Update the avatar
-            $avatar = $request->file('avatar');
-
-            // Generate a unique filename
-            $avatarName = time() . '_' . uniqid() . '.' . $avatar->getClientOriginalExtension();
-
-            // Define the path where the image will be stored
-            $destinationPath = public_path('img/avatars');
-
-            // Move the image to the destination path
-            $avatar->move($destinationPath, $avatarName);
-
-            // Generate the full URL to the image
-            $avatarUrl = config('app.url') . '/img/avatars/' . $avatarName;
-
-            $user->avatar = $avatarUrl;
-        }
-
-        $user->update();
-
-        return response()->json($user, Response::HTTP_OK);
     }
-
 
     /**
      * DELETE /api/admin/users/{user}
      *
      * Soft delete a specific user
      */
-    public function destroy(User $user)
+    public function destroy($id)
     {
-        $user->delete();
-        return response()->json(["message" => 'User suspended successfully.'], 204);
+        $user = User::withoutTrashed()->find($id);
+
+        if ($user) {
+            $user->delete();
+
+            return response()->json(['message' => 'User suspended successfully'], Response::HTTP_OK); // or 204
+        } else {
+            return response()->json(['message' => 'User not found'], Response::HTTP_NOT_FOUND);
+        }
     }
 
     /**
@@ -160,7 +175,7 @@ class UserController extends Controller
     public function trashed()
     {
         $users = User::onlyTrashed()->get();
-        return response()->json($users);
+        return response()->json($users, Response::HTTP_OK);
     }
 
     /**
@@ -170,9 +185,14 @@ class UserController extends Controller
      */
     public function restore($id)
     {
-        $user = User::withTrashed()->findOrFail($id);
-        $user->restore();
-        return response()->json(['message' => 'User restored successfully']);
+        $user = User::onlyTrashed()->find($id);
+
+        if ($user) {
+            $user->restore();
+            return response()->json(['message' => 'User restored successfully'], Response::HTTP_OK);
+        } else {
+            return response()->json(['message' => 'User not found'], Response::HTTP_NOT_FOUND);
+        }
     }
 
     /**
@@ -182,8 +202,20 @@ class UserController extends Controller
      */
     public function forceDelete($id)
     {
-        $user = User::onlyTrashed()->findOrFail($id);
-        $user->forceDelete();
-        return response()->json(null, 204);
+        $user = User::onlyTrashed()->find($id);
+
+        if ($user) {
+            if ($user->avatar) {
+                $parsedUrl = parse_url($user->avatar);
+                $oldAvatar = basename($parsedUrl['path']);
+                unlink(public_path('img/avatars') . '/' . $oldAvatar);
+            }
+
+            $user->forceDelete();
+
+            return response()->json(['message' => 'User Permanently deleted successfully.'], Response::HTTP_OK);
+        } else {
+            return response()->json(['message' => 'User not found'], Response::HTTP_NOT_FOUND);
+        }
     }
 }

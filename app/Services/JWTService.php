@@ -15,7 +15,7 @@ class JWTService
     {
         $this->config = Configuration::forSymmetricSigner(
             new Sha256(),
-            InMemory::plainText(env('JWT_SECRET')) // Ensure JWT_SECRET is in .env
+            InMemory::plainText(config('app.jwt_secret')) // Ensure JWT_SECRET is in .env
         );
     }
 
@@ -41,6 +41,19 @@ class JWTService
     }
 
 
+    public function getUUIDFromValidatedToken($token)
+    {
+        try {
+            $jwtToken = $this->config->parser()->parse($token);
+            $this->config->validator()->assert($jwtToken, ...[
+                new SignedWith($this->config->signer(), $this->config->signingKey())
+            ]);
+
+            return $jwtToken->claims()->get('uid');
+        } catch (\Exception $e) {
+            return false;
+        }
+    }
 
     // public function validateToken(string $token): bool
     // {

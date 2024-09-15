@@ -18,16 +18,10 @@ Route::prefix('auth')->group(function() {
     Route::post('/logout', [AuthController::class, 'logout'])->middleware(JWTMiddleware::class);
 });
 
-Route::prefix('admin')->group(function() {
+Route::prefix('admin')->middleware(JWTMiddleware::class)->group(function() {
 
     // Users routes
     Route::apiResource('users', UserController::class);
-    // Route::get('users', [UserController::class, 'index']);
-    // Route::post('users', [UserController::class, 'store']);
-    // Route::get('users/{user}', [UserController::class, 'show']);
-    // Route::patch('users/{user}', [UserController::class, 'update']);
-    // Route::delete('users/{user}', [UserController::class, 'destroy']);
-
     // Additional routes for soft delete functionality
     Route::get('users/trashed', [UserController::class, 'trashed']); // View soft-deleted stores
     Route::post('users/{id}/restore', [UserController::class, 'restore']); // Restore soft-deleted store
@@ -55,7 +49,37 @@ Route::prefix('admin')->group(function() {
     Route::delete('offers/{id}/force-delete', [OfferController::class, 'forceDelete']); // Permanently delete store
 });
 
-Route::prefix('v1')->group(function() {
-    Route::get('nearby-stores', [StoreController::class, 'getNearbyStores']);
-    Route::get('nearby-offers', [OfferController::class, 'getNearbyOffers']);
+// Route::prefix('v1')->middleware('auth.jwt')->group(function() {
+//     Route::get('/user/categories', [CategoryController::class, 'index']);
+//     Route::get('/user/categories/{id}', [CategoryController::class, 'show']);
+
+//     Route::get('/user/stores', [StoreController::class, 'index']);
+//     Route::get('/user/stores/{id}', [StoreController::class, 'show']);
+//     Route::get('/user/stores/nearby-stores', [StoreController::class, 'getNearbyStores']);
+//     Route::post('/user/stores/{id}/favorite', [StoreController::class, 'toggleFavorite']);
+
+
+//     Route::get('/user/offers', [OfferController::class, 'index']);
+//     Route::get('/user/offers/{id}', [OfferController::class, 'show']);
+//     Route::get('/user/offers/nearby-offers', [OfferController::class, 'getNearbyOffers']);
+// });
+
+Route::prefix('v1')->middleware('auth.jwt')->group(function() {
+    Route::prefix('user')->group(function(){
+        Route::get('categories/list-all', [CategoryController::class, 'index']);
+        Route::get('categories/get-category/{id}', [CategoryController::class, 'show']);
+
+        Route::get('stores/list-all', [StoreController::class, 'index']);
+        Route::get('stores/get-store/{id}', [StoreController::class, 'show']);
+        Route::get('stores/nearby-stores', [StoreController::class, 'getNearbyStores']);
+        Route::post('stores/{id}/favorite', [StoreController::class, 'toggleFavorite']);
+
+        Route::get('offers/list-all', [OfferController::class, 'index']);
+        Route::get('offers/get-offer/{id}', [OfferController::class, 'show']);
+        Route::get('offers/nearby-offers', [OfferController::class, 'getNearbyOffers']);
+    });
+
+
+    // Route::get('nearby-offers', [OfferController::class, 'getNearbyOffers']);
+
 });

@@ -37,4 +37,14 @@ class Store extends Model
     {
         return $this->hasMany(Offer::class, 'store_id');
     }
+
+    public function favoriteByUsers()
+    {
+        return $this->belongsToMany(User::class, 'store_favorites')->withTimestamps();
+    }
+
+    public function favoritesCount()
+    {
+        return $this->favoriteByUsers()->count();
+    }
 }
