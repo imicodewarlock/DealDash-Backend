@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Offer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Validator;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -53,6 +54,11 @@ class OfferController extends Controller
 
             // Define the path where the image will be stored
             $destinationPath = public_path('img/offers');
+
+            // Check if the directory exists, if not, create it
+            if (!File::exists($destinationPath)) {
+                File::makeDirectory($destinationPath, 0755, true); // Create the directory with the correct permissions
+            }
 
             // Move the image to the destination path
             $image->move($destinationPath, $imageName);
@@ -141,6 +147,11 @@ class OfferController extends Controller
 
                 // Define the path where the image will be stored
                 $destinationPath = public_path('img/offers');
+
+                // Check if the directory exists, if not, create it
+                if (!File::exists($destinationPath)) {
+                    File::makeDirectory($destinationPath, 0755, true); // Create the directory with the correct permissions
+                }
 
                 // Move the image to the destination path
                 $image->move($destinationPath, $imageName);
