@@ -44,11 +44,6 @@ class UserController extends Controller
 
         $avatarUrl = null;
         if ($request->hasFile('avatar')) {
-            $avatar = $request->file('avatar');
-
-            // Generate a unique filename
-            $avatarName = time() . '_' . uniqid() . '.' . $avatar->getClientOriginalExtension();
-
             // Define the path where the image will be stored
             $destinationPath = public_path('img/avatars');
 
@@ -56,6 +51,11 @@ class UserController extends Controller
             if (!File::exists($destinationPath)) {
                 File::makeDirectory($destinationPath, 0755, true); // Create the directory with the correct permissions
             }
+
+            $avatar = $request->file('avatar');
+
+            // Generate a unique filename
+            $avatarName = time() . '_' . uniqid() . '.' . $avatar->getClientOriginalExtension();
 
             // Move the image to the destination path
             $avatar->move($destinationPath, $avatarName);
@@ -122,19 +122,6 @@ class UserController extends Controller
             $user->role = $request->role ?? $user->role;
 
             if ($request->hasFile('avatar')) {
-                // first unlink the old avatar if exists
-                if ($user->avatar) {
-                    $parsedUrl = parse_url($user->avatar);
-                    $oldAvatar = basename($parsedUrl['path']);
-                    unlink(public_path('img/avatars') . '/' . $oldAvatar);
-                }
-
-                // Next Update the avatar
-                $avatar = $request->file('avatar');
-
-                // Generate a unique filename
-                $avatarName = time() . '_' . uniqid() . '.' . $avatar->getClientOriginalExtension();
-
                 // Define the path where the image will be stored
                 $destinationPath = public_path('img/avatars');
 
@@ -142,6 +129,23 @@ class UserController extends Controller
                 if (!File::exists($destinationPath)) {
                     File::makeDirectory($destinationPath, 0755, true); // Create the directory with the correct permissions
                 }
+
+                // first unlink the old avatar if exists
+                if ($user->avatar) {
+                    $parsedUrl = parse_url($user->avatar);
+                    $oldAvatar = basename($parsedUrl['path']);
+
+                    if (File::exists("{$destinationPath}/{$oldAvatar}")) {
+                        // unlink($destinationPath . '/' . $oldAvatar);
+                        unlink("{$destinationPath}/{$oldAvatar}");
+                    }
+                }
+
+                // Next Update the avatar
+                $avatar = $request->file('avatar');
+
+                // Generate a unique filename
+                $avatarName = time() . '_' . uniqid() . '.' . $avatar->getClientOriginalExtension();
 
                 // Move the image to the destination path
                 $avatar->move($destinationPath, $avatarName);

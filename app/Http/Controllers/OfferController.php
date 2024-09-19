@@ -47,11 +47,6 @@ class OfferController extends Controller
 
         $imageUrl = null;
         if ($request->hasFile('image')) {
-            $image = $request->file('image');
-
-            // Generate a unique filename
-            $imageName = time() . '_' . uniqid() . '.' . $image->getClientOriginalExtension();
-
             // Define the path where the image will be stored
             $destinationPath = public_path('img/offers');
 
@@ -59,6 +54,11 @@ class OfferController extends Controller
             if (!File::exists($destinationPath)) {
                 File::makeDirectory($destinationPath, 0755, true); // Create the directory with the correct permissions
             }
+
+            $image = $request->file('image');
+
+            // Generate a unique filename
+            $imageName = time() . '_' . uniqid() . '.' . $image->getClientOriginalExtension();
 
             // Move the image to the destination path
             $image->move($destinationPath, $imageName);
@@ -134,17 +134,6 @@ class OfferController extends Controller
             $offer->end_date = $request->end_date ?? $offer->end_date;
 
             if ($request->hasFile('image')) {
-                // first unlink the old image
-                $parsedUrl = parse_url($offer->image);
-                $oldImage = basename($parsedUrl['path']);
-                unlink(public_path('img/offers') . '/' . $oldImage);
-
-                // Next Update the avatar
-                $image = $request->file('image');
-
-                // Generate a unique filename
-                $imageName = time() . '_' . uniqid() . '.' . $image->getClientOriginalExtension();
-
                 // Define the path where the image will be stored
                 $destinationPath = public_path('img/offers');
 
@@ -152,6 +141,23 @@ class OfferController extends Controller
                 if (!File::exists($destinationPath)) {
                     File::makeDirectory($destinationPath, 0755, true); // Create the directory with the correct permissions
                 }
+
+                // first unlink the old avatar
+                if ($offer->image) {
+                    $parsedUrl = parse_url($offer->image);
+                    $oldImage = basename($parsedUrl['path']);
+
+                    if (File::exists("{$destinationPath}/{$oldImage}")) {
+                        // unlink(public_path('img/categories') . '/' . $oldImage);
+                        unlink("{$destinationPath}/{$oldImage}");
+                    }
+                }
+
+                // Next Update the avatar
+                $image = $request->file('image');
+
+                // Generate a unique filename
+                $imageName = time() . '_' . uniqid() . '.' . $image->getClientOriginalExtension();
 
                 // Move the image to the destination path
                 $image->move($destinationPath, $imageName);
