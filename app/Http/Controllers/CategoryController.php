@@ -17,8 +17,24 @@ class CategoryController extends Controller
      */
     public function index()
     {
-        $categories = Category::all();
-        return response()->json($categories, Response::HTTP_OK);
+        // $categories = Category::all();
+        $categories = Category::withTrashed()->get();
+
+        if ($categories->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => __('category.all_records_err'),
+                'errors' => [],
+                'data' => [],
+            ], Response::HTTP_NOT_FOUND);
+        } else {
+            return response()->json([
+                'success' => true,
+                'message' => __('category.all_records'),
+                'errors' => [],
+                'data' => $categories,
+            ], Response::HTTP_OK);
+        }
     }
 
     /**
@@ -34,7 +50,12 @@ class CategoryController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return response()->json($validator->errors(), Response::HTTP_BAD_REQUEST);
+            return response()->json([
+                'success' => false,
+                'message' => __('category.failed'),
+                'errors' => $validator->errors(),
+                'data' => [],
+            ], Response::HTTP_BAD_REQUEST);
         }
 
         $imageUrl = null;
@@ -64,7 +85,12 @@ class CategoryController extends Controller
             'image' => $imageUrl,
         ]);
 
-        return response()->json($category, Response::HTTP_CREATED);
+        return response()->json([
+            'success' => true,
+            'message' => __('category.added'),
+            'errors' => [],
+            'data' => $category
+        ], Response::HTTP_CREATED);
     }
 
     /**
@@ -74,15 +100,24 @@ class CategoryController extends Controller
      */
     public function show($id)
     {
-        $category = Category::find($id);
+        $category = Category::withTrashed()->find($id);
 
         if ($category) {
-            return response()->json($category, Response::HTTP_OK);
+            return response()->json([
+                'success' => true,
+                'message' => __('category.found'),
+                'errors' => [],
+                'data' => $category
+            ], Response::HTTP_OK);
         } else {
-            return response()->json(['message' => 'Category not found'], Response::HTTP_NOT_FOUND);
+            return response()->json([
+                'success' => false,
+                'message' => __('category.not_found'),
+                'errors' => [],
+                'data' => [],
+            ], Response::HTTP_NOT_FOUND);
         }
     }
-
 
     /**
      * PUT /api/admin/categories/{category}
@@ -91,7 +126,7 @@ class CategoryController extends Controller
      */
     public function update(Request $request, $id)
     {
-        $category = Category::find($id);
+        $category = Category::withTrashed()->find($id);
 
         if ($category) {
             $validator = Validator::make($request->all(), [
@@ -100,7 +135,12 @@ class CategoryController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return response()->json($validator->errors(), Response::HTTP_BAD_REQUEST);
+                return response()->json([
+                    'success' => false,
+                    'message' => __('category.failed'),
+                    'errors' => $validator->errors(),
+                    'data' => [],
+                ], Response::HTTP_BAD_REQUEST);
             }
 
             $category->name = $request->name ?? $category->name;
@@ -142,9 +182,19 @@ class CategoryController extends Controller
 
             $category->update();
 
-            return response()->json($category, Response::HTTP_OK);
+            return response()->json([
+                'success' => true,
+                'message' => __('category.updated'),
+                'errors' => [],
+                'data' => $category,
+            ], Response::HTTP_OK);
         } else {
-            return response()->json(['message' => 'Category not found'], Response::HTTP_NOT_FOUND);
+            return response()->json([
+                'success' => false,
+                'message' => __('category.not_found'),
+                'errors' => [],
+                'data' => [],
+            ], Response::HTTP_NOT_FOUND);
         }
     }
 
@@ -160,9 +210,19 @@ class CategoryController extends Controller
         if ($category) {
             $category->delete();
 
-            return response()->json(['message' => 'Category disabled successfully'], Response::HTTP_OK); // or 204
+            return response()->json([
+                'success' => true,
+                'message' => __('category.disabled'),
+                'errors' => [],
+                'data' => [],
+            ], Response::HTTP_OK); // or 204
         } else {
-            return response()->json(['message' => 'Category not found'], Response::HTTP_NOT_FOUND);
+            return response()->json([
+                'success' => false,
+                'message' => __('category.not_found'),
+                'errors' => [],
+                'data' => [],
+            ], Response::HTTP_NOT_FOUND);
         }
     }
 
@@ -174,7 +234,22 @@ class CategoryController extends Controller
     public function trashed()
     {
         $categories = Category::onlyTrashed()->get();
-        return response()->json($categories, Response::HTTP_OK);
+
+        if ($categories->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => __('category.disabled_records_err'),
+                'errors' => [],
+                'data' => [],
+            ], Response::HTTP_NOT_FOUND);
+        } else {
+            return response()->json([
+                'success' => true,
+                'message' => __('category.disabled_records'),
+                'errors' => [],
+                'data' => $categories
+            ], Response::HTTP_OK);
+        }
     }
 
     /**
@@ -188,9 +263,20 @@ class CategoryController extends Controller
 
         if ($category) {
             $category->restore();
-            return response()->json(['message' => 'Category restored successfully'], Response::HTTP_OK);
+
+            return response()->json([
+                'success' => true,
+                'message' => __('category.restored'),
+                'errors' => [],
+                'data' => [],
+            ], Response::HTTP_OK);
         } else {
-            return response()->json(['message' => 'Category not found'], Response::HTTP_NOT_FOUND);
+            return response()->json([
+                'success' => false,
+                'message' => __('category.not_found'),
+                'errors' => [],
+                'data' => [],
+            ], Response::HTTP_NOT_FOUND);
         }
     }
 
@@ -212,9 +298,71 @@ class CategoryController extends Controller
 
             $category->forceDelete();
 
-            return response()->json(['message' => 'Category deleted permanently.'], Response::HTTP_OK);
+            return response()->json([
+                'success' => true,
+                'message' => __('category.deleted'),
+                'errors' => [],
+                'data' => [],
+            ], Response::HTTP_OK);
         } else {
-            return response()->json(['message' => 'Category not found'], Response::HTTP_NOT_FOUND);
+            return response()->json([
+                'success' => false,
+                'message' => __('category.not_found'),
+                'errors' => [],
+                'data' => [],
+            ], Response::HTTP_NOT_FOUND);
+        }
+    }
+
+    /**
+     * GET /api/admin/categories
+     *
+     * Display a listing of categories (only non-deleted ones)
+     */
+    public function getAvailableCategories()
+    {
+        $categories = Category::withoutTrashed()->get();
+
+        if ($categories->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => __('category.all_records_err'),
+                'errors' => [],
+                'data' => [],
+            ], Response::HTTP_NOT_FOUND);
+        } else {
+            return response()->json([
+                'success' => true,
+                'message' => __('category.all_records'),
+                'errors' => [],
+                'data' => $categories,
+            ], Response::HTTP_OK);
+        }
+    }
+
+    /**
+     * GET /api/admin/categories/{category}
+     *
+     * Display a specific category
+     */
+    public function getSingleCategory($id)
+    {
+        $category = Category::withoutTrashed()->find($id);
+
+        if ($category) {
+            return response()->json([
+                'success' => true,
+                'message' => __('category.found'),
+                'errors' => [],
+                'data' => $category
+            ], Response::HTTP_OK);
+        } else {
+            return response()->json([
+                'success' => false,
+                'message' => __('category.not_found'),
+                'errors' => [],
+                'data' => [],
+            ], Response::HTTP_NOT_FOUND);
         }
     }
 }

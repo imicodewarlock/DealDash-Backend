@@ -19,18 +19,23 @@ class StoreController extends Controller
     public function index()
     {
         // $stores = Store::all();
-        $stores = Store::withCount(['favoriteByUsers as favorites_count'])
-                        ->with('offers')
-                        ->orderBy('favorites_count', 'desc')
-                        ->get();
+        $stores = Store::withTrashed()->get();
 
-        // Handle null values (if any) in the collection
-        $stores->map(function ($store) {
-            $store->favorites_count = $store->favorites_count ?? 0;
-            return $store;
-        });
-
-        return response()->json($stores, Response::HTTP_OK);
+        if (!$stores) {
+            return response()->json([
+                'success' => false,
+                'message' => __('store.all_records_err'),
+                'errors' => [],
+                'data' => [],
+            ], Response::HTTP_NOT_FOUND);
+        } else {
+            return response()->json([
+                'success' => true,
+                'message' => __('store.all_records'),
+                'errors' => [],
+                'data' => $stores
+            ], Response::HTTP_OK);
+        }
     }
 
     /**
@@ -44,14 +49,20 @@ class StoreController extends Controller
             'name' => 'required|string|max:255',
             'category_id' => 'required|numeric',
             'image' => 'required|image|mimes:jpeg,png,jpg,gif|max:2048',
-            'about' => 'required',
             'address' => 'required|string|max:255',
+            'about' => 'required',
+            'phone' => 'required|numeric',
             'latitude' => 'required|numeric',
             'longitude' => 'required|numeric',
         ]);
 
         if ($validator->fails()) {
-            return response()->json($validator->errors(), Response::HTTP_BAD_REQUEST);
+            return response()->json([
+                'success' => false,
+                'message' => __('store.failed'),
+                'errors' => $validator->errors(),
+                'data' => [],
+            ], Response::HTTP_BAD_REQUEST);
         }
 
         $imageUrl = null;
@@ -76,17 +87,23 @@ class StoreController extends Controller
             $imageUrl = config('app.url') . '/img/stores/' . $imageName;
         }
 
-        $category = Store::create([
+        $store = Store::create([
             'name' => $request->name,
             'category_id' => $request->category_id,
             'image' => $imageUrl,
-            'about' => $request->about,
             'address' => $request->address,
+            'about' => $request->about,
+            'phone' => $request->phone,
             'latitude' => $request->latitude,
             'longitude' => $request->longitude,
         ]);
 
-        return response()->json($category, Response::HTTP_CREATED);
+        return response()->json([
+            'success' => true,
+            'message' => __('store.added'),
+            'errors' => [],
+            'data' => $store
+        ], Response::HTTP_CREATED);
     }
 
     /**
@@ -96,14 +113,22 @@ class StoreController extends Controller
      */
     public function show($id)
     {
-        $store = Store::withCount(['favoriteByUsers as favorites_count'])
-                        ->with('offers')
-                        ->find($id);
+        $store = Store::withTrashed()->find($id);
 
         if ($store) {
-            return response()->json($store, Response::HTTP_OK);
+            return response()->json([
+                'success' => true,
+                'message' => __('store.found'),
+                'errors' => [],
+                'data' => $store,
+            ], Response::HTTP_OK);
         } else {
-            return response()->json(['message' => 'Store not found'], Response::HTTP_NOT_FOUND);
+            return response()->json([
+                'success' => false,
+                'message' => __('store.not_found'),
+                'errors' => [],
+                'data' => [],
+            ], Response::HTTP_NOT_FOUND);
         }
     }
 
@@ -114,27 +139,34 @@ class StoreController extends Controller
      */
     public function update(Request $request, $id)
     {
-        $store = Store::find($id);
+        $store = Store::withTrashed()->find($id);
 
         if ($store) {
             $validator = Validator::make($request->all(), [
                 'name' => 'required|string|max:255',
                 'category_id' => 'required|numeric',
                 'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
-                'about' => 'required',
                 'address' => 'required|string|max:255',
+                'about' => 'required',
+                'phone' => 'required|numeric',
                 'latitude' => 'required|numeric',
                 'longitude' => 'required|numeric',
             ]);
 
             if ($validator->fails()) {
-                return response()->json($validator->errors(), Response::HTTP_BAD_REQUEST);
+                return response()->json([
+                    'success' => false,
+                    'message' => __('store.failed'),
+                    'errors' => $validator->errors(),
+                    'data' => [],
+                ], Response::HTTP_BAD_REQUEST);
             }
 
             $store->name = $request->name ?? $store->name;
             $store->category_id = $request->category_id ?? $store->category_id;
-            $store->about = $request->about ?? $store->about;
             $store->address = $request->address ?? $store->address;
+            $store->about = $request->about ?? $store->about;
+            $store->phone = $request->phone ?? $store->phone;
             $store->latitude = $request->latitude ?? $store->latitude;
             $store->longitude = $request->longitude ?? $store->longitude;
 
@@ -175,9 +207,19 @@ class StoreController extends Controller
 
             $store->update();
 
-            return response()->json($store, Response::HTTP_OK);
+            return response()->json([
+                'success' => true,
+                'message' => __('store.updated'),
+                'errors' => [],
+                'data' => $store,
+            ], Response::HTTP_OK);
         } else {
-            return response()->json(['message' => 'Store not found'], Response::HTTP_NOT_FOUND);
+            return response()->json([
+                'success' => false,
+                'message' => __('store.not_found'),
+                'errors' => [],
+                'data' => [],
+            ], Response::HTTP_NOT_FOUND);
         }
     }
 
@@ -193,9 +235,19 @@ class StoreController extends Controller
         if ($store) {
             $store->delete();
 
-            return response()->json(['message' => 'Store disabled successfully'], Response::HTTP_OK); // or 204
+            return response()->json([
+                'success' => true,
+                'message' => __('store.disabled'),
+                'errors' => [],
+                'data' => [],
+            ], Response::HTTP_OK); // or 204
         } else {
-            return response()->json(['message' => 'Store not found'], Response::HTTP_NOT_FOUND);
+            return response()->json([
+                'success' => false,
+                'message' => __('store.not_found'),
+                'errors' => [],
+                'data' => [],
+            ], Response::HTTP_NOT_FOUND);
         }
     }
 
@@ -207,7 +259,22 @@ class StoreController extends Controller
     public function trashed()
     {
         $stores = Store::onlyTrashed()->get();
-        return response()->json($stores, Response::HTTP_OK);
+
+        if ($stores->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => __('store.disabled_records_err'),
+                'errors' => [],
+                'data' => [],
+            ], Response::HTTP_NOT_FOUND);
+        } else {
+            return response()->json([
+                'success' => true,
+                'message' => __('store.disabled_records'),
+                'errors' => [],
+                'data' => $stores
+            ], Response::HTTP_OK);
+        }
     }
 
     /**
@@ -221,9 +288,19 @@ class StoreController extends Controller
 
         if ($store) {
             $store->restore();
-            return response()->json(['message' => 'Store restored successfully'], Response::HTTP_OK);
+            return response()->json([
+                'success' => true,
+                'message' => __('store.restored'),
+                'errors' => [],
+                'data' => [],
+            ], Response::HTTP_OK);
         } else {
-            return response()->json(['message' => 'Store not found'], Response::HTTP_NOT_FOUND);
+            return response()->json([
+                'success' => false,
+                'message' => __('store.not_found'),
+                'errors' => [],
+                'data' => [],
+            ], Response::HTTP_NOT_FOUND);
         }
     }
 
@@ -245,9 +322,79 @@ class StoreController extends Controller
 
             $store->forceDelete();
 
-            return response()->json(['message' => 'Store deleted permanently.'], Response::HTTP_OK);
+            return response()->json([
+                'success' => true,
+                'message' => __('store.deleted'),
+                'errors' => [],
+                'data' => [],
+            ], Response::HTTP_OK);
         } else {
-            return response()->json(['message' => 'Store not found'], Response::HTTP_NOT_FOUND);
+            return response()->json([
+                'success' => false,
+                'message' => __('store.not_found'),
+                'errors' => [],
+                'data' => [],
+            ], Response::HTTP_NOT_FOUND);
+        }
+    }
+
+    /**
+     * GET /api/admin/stores
+     *
+     * Display a listing of stores (only non-deleted ones)
+     */
+    public function getAvailableStores()
+    {
+        // $stores = Store::all();
+        $stores = Store::withoutTrashed()
+                        ->withCount(['favoriteByUsers as favorites_count'])
+                        ->with('offers')
+                        ->orderBy('favorites_count', 'desc')
+                        ->get();
+
+        if (!$stores) {
+            return response()->json([
+                'success' => false,
+                'message' => __('store.all_records_err'),
+                'errors' => [],
+                'data' => [],
+            ], Response::HTTP_NOT_FOUND);
+        } else {
+            return response()->json([
+                'success' => true,
+                'message' => __('store.all_records'),
+                'errors' => [],
+                'data' => $stores
+            ], Response::HTTP_OK);
+        }
+    }
+
+    /**
+     * GET /api/admin/stores/{store}
+     *
+     * Display a specific store
+     */
+    public function getSingleStore($id)
+    {
+        $store = Store::withoutTrashed()
+                        ->withCount(['favoriteByUsers as favorites_count'])
+                        ->with('offers')
+                        ->find($id);
+
+        if ($store) {
+            return response()->json([
+                'success' => true,
+                'message' => __('store.found'),
+                'errors' => [],
+                'data' => $store,
+            ], Response::HTTP_OK);
+        } else {
+            return response()->json([
+                'success' => false,
+                'message' => __('store.not_found'),
+                'errors' => [],
+                'data' => [],
+            ], Response::HTTP_NOT_FOUND);
         }
     }
 
@@ -264,7 +411,12 @@ class StoreController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return response()->json($validator->errors(), Response::HTTP_BAD_REQUEST);
+            return response()->json([
+                'success' => false,
+                'message' => __('store.failed'),
+                'errors' => $validator->errors(),
+                'data' => [],
+            ], Response::HTTP_BAD_REQUEST);
         }
 
         $latitude = $request['latitude'];
@@ -279,6 +431,7 @@ class StoreController extends Controller
             'stores.image',
             'stores.address',
             'stores.about',
+            'stores.phone',
             'stores.latitude',
             'stores.longitude',
             DB::raw(
@@ -293,44 +446,60 @@ class StoreController extends Controller
         ->get();
 
         // Return the stores as a JSON response
-        return response()->json($stores, Response::HTTP_OK);
+        if (!$stores) {
+            return response()->json([
+                'success' => false,
+                'message' => __('store.nearby_records_err'),
+                'errors' => [],
+                'data' => [],
+            ], Response::HTTP_NOT_FOUND);
+        } else {
+            return response()->json([
+                'success' => true,
+                'message' => __('store.nearby_records'),
+                'errors' => [],
+                'data' => $stores,
+            ], Response::HTTP_OK);
+        }
     }
 
     public function toggleFavorite(Request $request, $id)
     {
-        $store = Store::find($id);
+        $store = Store::withTrashed()->find($id);
 
         if ($store) {
             $user = $request->user();
-            // $user = auth()->user();
-            // dd($user);
 
             if ($user->favoriteStores()->where('store_id', $store->id)->exists()) {
                 // Unfavorite if already favorite
                 $user->favoriteStores()->detach($store->id);
-                return response()->json(['message' => 'Store unfavorite.', 'favorites_count' => $store->favoritesCount()], Response::HTTP_OK);
+                return response()->json([
+                    'success' => true,
+                    'message' => __('store.unfavourited'),
+                    'errors' => [],
+                    'data' => [
+                        'favorites_count' => $store->favoritesCount(),
+                    ],
+                ], Response::HTTP_OK);
             } else {
                 // Favorite the store
                 $user->favoriteStores()->attach($store->id);
-                return response()->json(['message' => 'Store favorite.', 'favorites_count' => $store->favoritesCount()], Response::HTTP_CREATED);
+                return response()->json([
+                    'success' => true,
+                    'message' => __('store.favourited'),
+                    'errors' => [],
+                    'data' => [
+                        'favorites_count' => $store->favoritesCount(),
+                    ],
+                ], Response::HTTP_CREATED);
             }
         } else {
-            return response()->json(['message' => 'Store not found'], Response::HTTP_NOT_FOUND);
+            return response()->json([
+                'success' => false,
+                'message' => __('store.not_found'),
+                'errors' => [],
+                'data' => [],
+            ], Response::HTTP_NOT_FOUND);
         }
     }
-
-    // public function getFavoritesCount($id)
-    // {
-    //     $store = Store::find($id);
-
-    //     if ($store) {
-    //         $count = $store->favoritesCount();
-    //         return response()->json([
-    //             'store_id' => $store->id,
-    //             'favorites_count' => $count
-    //         ]);
-    //     } else {
-    //         return response()->json(['message' => 'Store not found'], Response::HTTP_NOT_FOUND);
-    //     }
-    // }
 }

@@ -18,8 +18,24 @@ class UserController extends Controller
      */
     public function index()
     {
-        $users = User::all();
-        return response()->json($users, Response::HTTP_OK);
+        // $users = User::all();
+        $users = User::withTrashed()->get();
+
+        if ($users->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => __('user.all_records_err'),
+                'errors' => [],
+                'data' => [],
+            ], Response::HTTP_NOT_FOUND);
+        } else {
+            return response()->json([
+                'success' => true,
+                'message' => __('user.all_records'),
+                'errors' => [],
+                'data' => $users
+            ], Response::HTTP_OK);
+        }
     }
 
     /**
@@ -39,7 +55,12 @@ class UserController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return response()->json($validator->errors(), Response::HTTP_BAD_REQUEST);
+            return response()->json([
+                'success' => false,
+                'message' => __('user.failed'),
+                'errors' => $validator->errors(),
+                'data' => [],
+            ], Response::HTTP_BAD_REQUEST);
         }
 
         $avatarUrl = null;
@@ -73,7 +94,12 @@ class UserController extends Controller
             'avatar' => $avatarUrl
         ]);
 
-        return response()->json($user, Response::HTTP_CREATED);
+        return response()->json([
+            'success' => true,
+            'message' => __('user.added'),
+            'errors' => [],
+            'data' => $user
+        ], Response::HTTP_CREATED);
     }
 
     /**
@@ -83,12 +109,22 @@ class UserController extends Controller
      */
     public function show($id)
     {
-        $user = User::find($id);
+        $user = User::withTrashed()->find($id);
 
         if ($user) {
-            return response()->json($user, Response::HTTP_OK);
+            return response()->json([
+                'success' => true,
+                'message' => __('user.found'),
+                'errors' => [],
+                'data' => $user
+            ], Response::HTTP_OK);
         } else {
-            return response()->json(['message' => 'User not found'], Response::HTTP_NOT_FOUND);
+            return response()->json([
+                'success' => false,
+                'message' => __('user.not_found'),
+                'errors' => [],
+                'data' => [],
+            ], Response::HTTP_NOT_FOUND);
         }
     }
 
@@ -99,7 +135,7 @@ class UserController extends Controller
      */
     public function update(Request $request, $id)
     {
-        $user = User::find($id);
+        $user = User::withTrashed()->find($id);
 
         if ($user) {
             $validator = Validator::make($request->all(), [
@@ -112,7 +148,12 @@ class UserController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return response()->json($validator->errors(), Response::HTTP_BAD_REQUEST);
+                return response()->json([
+                    'success' => false,
+                    'message' => __('user.failed'),
+                    'errors' => $validator->errors(),
+                    'data' => [],
+                ], Response::HTTP_BAD_REQUEST);
             }
 
             $user->name = $request->name ?? $user->name;
@@ -158,9 +199,19 @@ class UserController extends Controller
 
             $user->update();
 
-            return response()->json($user, Response::HTTP_OK);
+            return response()->json([
+                'success' => true,
+                'message' => __('user.updated'),
+                'errors' => [],
+                'data' => $user,
+            ], Response::HTTP_OK);
         } else {
-            return response()->json(['message' => 'User not found'], Response::HTTP_NOT_FOUND);
+            return response()->json([
+                'success' => false,
+                'message' => __('user.not_found'),
+                'errors' => [],
+                'data' => [],
+            ], Response::HTTP_NOT_FOUND);
         }
     }
 
@@ -176,9 +227,19 @@ class UserController extends Controller
         if ($user) {
             $user->delete();
 
-            return response()->json(['message' => 'User suspended successfully'], Response::HTTP_OK); // or 204
+            return response()->json([
+                'success' => true,
+                'message' => __('user.disabled'),
+                'errors' => [],
+                'data' => [],
+            ], Response::HTTP_OK); // or 204
         } else {
-            return response()->json(['message' => 'User not found'], Response::HTTP_NOT_FOUND);
+            return response()->json([
+                'success' => false,
+                'message' => __('user.not_found'),
+                'errors' => [],
+                'data' => [],
+            ], Response::HTTP_NOT_FOUND);
         }
     }
 
@@ -190,7 +251,22 @@ class UserController extends Controller
     public function trashed()
     {
         $users = User::onlyTrashed()->get();
-        return response()->json($users, Response::HTTP_OK);
+
+        if ($users->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => __('user.disabled_records_err'),
+                'errors' => [],
+                'data' => [],
+            ], Response::HTTP_NOT_FOUND);
+        } else {
+            return response()->json([
+                'success' => true,
+                'message' => __('user.disabled_records'),
+                'errors' => [],
+                'data' => $users
+            ], Response::HTTP_OK);
+        }
     }
 
     /**
@@ -204,9 +280,20 @@ class UserController extends Controller
 
         if ($user) {
             $user->restore();
-            return response()->json(['message' => 'User restored successfully'], Response::HTTP_OK);
+
+            return response()->json([
+                'success' => true,
+                'message' => __('user.restored'),
+                'errors' => [],
+                'data' => [],
+            ], Response::HTTP_OK);
         } else {
-            return response()->json(['message' => 'User not found'], Response::HTTP_NOT_FOUND);
+            return response()->json([
+                'success' => false,
+                'message' => __('user.not_found'),
+                'errors' => [],
+                'data' => [],
+            ], Response::HTTP_NOT_FOUND);
         }
     }
 
@@ -228,9 +315,19 @@ class UserController extends Controller
 
             $user->forceDelete();
 
-            return response()->json(['message' => 'User Permanently deleted successfully.'], Response::HTTP_OK);
+            return response()->json([
+                'success' => true,
+                'message' => __('user.deleted'),
+                'errors' => [],
+                'data' => [],
+            ], Response::HTTP_OK);
         } else {
-            return response()->json(['message' => 'User not found'], Response::HTTP_NOT_FOUND);
+            return response()->json([
+                'success' => false,
+                'message' => __('user.not_found'),
+                'errors' => [],
+                'data' => [],
+            ], Response::HTTP_NOT_FOUND);
         }
     }
 }

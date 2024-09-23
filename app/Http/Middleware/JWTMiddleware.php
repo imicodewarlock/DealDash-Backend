@@ -26,18 +26,33 @@ class JWTMiddleware
 
         try {
             if (!$token || !$this->jwtService->validateToken($token)) {
-                return response()->json(['message' => 'Unauthorized'], Response::HTTP_UNAUTHORIZED);
+                return response()->json([
+                    'success' => false,
+                    'message' => __('auth.token_not_found'),
+                    'errors' => [],
+                    'data' => [],
+                ], Response::HTTP_UNAUTHORIZED);
             }
 
             $userId = $this->jwtService->getUUIDFromValidatedToken($token);
 
             if (!$userId) {
-                return response()->json(['error' => 'Invalid token'], 401);
+                return response()->json([
+                    'success' => false,
+                    'message' => __('auth.invalid_token'),
+                    'errors' => [],
+                    'data' => [],
+                ], Response::HTTP_UNAUTHORIZED);
             }
 
             $user = User::find($userId);
             if (!$user) {
-                return response()->json(['error' => 'User not found'], Response::HTTP_UNAUTHORIZED);
+                return response()->json([
+                    'success' => false,
+                    'message' => __('auth.user_not_found'),
+                    'errors' => [],
+                    'data' => [],
+                ], Response::HTTP_UNAUTHORIZED);
             }
 
             // Authenticate the user in the current request
@@ -45,11 +60,21 @@ class JWTMiddleware
 
             // Check if the token is revoked
             if (RevokedAccessToken::where('token', $token)->exists()) {
-                return response()->json(['message' => 'Already signed out, try to sign in again.'], Response::HTTP_UNAUTHORIZED);
+                return response()->json([
+                    'success' => false,
+                    'message' => __('auth.already_signed_out'),
+                    'errors' => [],
+                    'data' => [],
+                ], Response::HTTP_UNAUTHORIZED);
             }
 
         } catch (\Exception $e) {
-            return response()->json(['message' => 'Invalid Token'], Response::HTTP_UNAUTHORIZED);
+            return response()->json([
+                'success' => false,
+                'message' => __('auth.invalid_token'),
+                'errors' => [],
+                'data' => [],
+            ], Response::HTTP_UNAUTHORIZED);
         }
 
         return $next($request);

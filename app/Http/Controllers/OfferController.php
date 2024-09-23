@@ -3,14 +3,26 @@
 namespace App\Http\Controllers;
 
 use App\Models\Offer;
+use App\Models\OfferNotification;
+use App\Models\User;
+use App\Services\FCMService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Validator;
 use Symfony\Component\HttpFoundation\Response;
 
+use function PHPUnit\Framework\isEmpty;
+
 class OfferController extends Controller
 {
+    protected $fcmService;
+
+    public function __construct(FCMService $fcmService)
+    {
+        $this->fcmService = $fcmService;
+    }
+
     /**
      * GET /api/admin/offers
      *
@@ -18,8 +30,23 @@ class OfferController extends Controller
      */
     public function index()
     {
-        $offers = Offer::all();
-        return response()->json($offers, Response::HTTP_OK);
+        $offers = Offer::withTrashed()->get();
+
+        if ($offers->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => __('offer.all_records_err'),
+                'errors' => [],
+                'data' => [],
+            ], Response::HTTP_NOT_FOUND);
+        } else {
+            return response()->json([
+                'success' => true,
+                'message' => __('offer.all_records'),
+                'errors' => [],
+                'data' => $offers,
+            ], Response::HTTP_OK);
+        }
     }
 
     /**
@@ -33,8 +60,8 @@ class OfferController extends Controller
             'name' => 'required|string|max:255',
             'store_id' => 'required|numeric',
             'image' => 'required|image|mimes:jpeg,png,jpg,gif|max:2048',
-            'about' => 'required',
             'address' => 'required|string|max:255',
+            'about' => 'required',
             'latitude' => 'required|numeric',
             'longitude' => 'required|numeric',
             'start_date' => 'required|date_format:Y-m-d H:i:s',
@@ -42,7 +69,12 @@ class OfferController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return response()->json($validator->errors(), Response::HTTP_BAD_REQUEST);
+            return response()->json([
+                'success' => false,
+                'message' => __('offer.failed'),
+                'errors' => $validator->errors(),
+                'data' => [],
+            ], Response::HTTP_BAD_REQUEST);
         }
 
         $imageUrl = null;
@@ -71,15 +103,52 @@ class OfferController extends Controller
             'name' => $request->name,
             'store_id' => $request->store_id,
             'image' => $imageUrl,
-            'about' => $request->about,
             'address' => $request->address,
+            'about' => $request->about,
             'latitude' => $request->latitude,
             'longitude' => $request->longitude,
             'start_date' => $request->start_date,
             'end_date' => $request->end_date,
         ]);
 
-        return response()->json($offer, Response::HTTP_CREATED);
+        // $userTokens = User::withoutTrashed()->pluck('fcm_token')->whereNotNull('fcm_token')->toArray();
+        // Fetch tokens of users to notify
+        $users = User::withoutTrashed()
+                    ->whereNotNull('fcm_token')
+                    ->get();
+
+        if (!isEmpty($users)) {
+            // Push notification to each user
+            foreach ($users as $user) {
+                OfferNotification::create([
+                    'offer_id' => $offer->id,
+                    'user_id' => $user->id,
+                    'is_read' => false
+                ]);
+
+                // Send FCM notification
+                $this->fcmService->sendNotification(
+                    $offer->name,
+                    $offer->about,
+                    $user->offer,
+                    ['offer_id' => $offer->id, 'offer_image' => $offer->image]
+                );
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => __('offer.added_with_notification'),
+                'errors' => [],
+                'data' => $offer,
+            ], Response::HTTP_CREATED);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => __('offer.added'),
+            'errors' => [],
+            'data' => $offer,
+        ], Response::HTTP_CREATED);
     }
 
     /**
@@ -89,12 +158,22 @@ class OfferController extends Controller
      */
     public function show($id)
     {
-        $offer = Offer::find($id);
+        $offer = Offer::withTrashed()->find($id);
 
         if ($offer) {
-            return response()->json($offer, Response::HTTP_OK);
+            return response()->json([
+                'success' => true,
+                'message' => __('offer.found'),
+                'errors' => [],
+                'data' => $offer,
+            ], Response::HTTP_OK);
         } else {
-            return response()->json(['message' => 'Offer not found'], Response::HTTP_NOT_FOUND);
+            return response()->json([
+                'success' => false,
+                'message' => __('offer.not_found'),
+                'errors' => [],
+                'data' => [],
+            ], Response::HTTP_NOT_FOUND);
         }
     }
 
@@ -105,15 +184,15 @@ class OfferController extends Controller
      */
     public function update(Request $request, $id)
     {
-        $offer = Offer::find($id);
+        $offer = Offer::withTrashed()->find($id);
 
         if ($offer) {
             $validator = Validator::make($request->all(), [
                 'name' => 'required|string|max:255',
                 'store_id' => 'required|numeric',
                 'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
-                'about' => 'required',
                 'address' => 'required|string|max:255',
+                'about' => 'required',
                 'latitude' => 'required|numeric',
                 'longitude' => 'required|numeric',
                 'start_date' => 'required',
@@ -121,13 +200,18 @@ class OfferController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return response()->json($validator->errors(), Response::HTTP_BAD_REQUEST);
+                return response()->json([
+                    'success' => false,
+                    'message' => __('offer.failed'),
+                    'errors' => $validator->errors(),
+                    'data' => [],
+                ], Response::HTTP_BAD_REQUEST);
             }
 
             $offer->name = $request->name ?? $offer->name;
             $offer->store_id = $request->store_id ?? $offer->store_id;
-            $offer->about = $request->about ?? $offer->about;
             $offer->address = $request->address ?? $offer->address;
+            $offer->about = $request->about ?? $offer->about;
             $offer->latitude = $request->latitude ?? $offer->latitude;
             $offer->longitude = $request->longitude ?? $offer->longitude;
             $offer->start_date = $request->start_date ?? $offer->start_date;
@@ -169,9 +253,19 @@ class OfferController extends Controller
             }
 
             $offer->update();
-            return response()->json($offer, Response::HTTP_OK);
+            return response()->json([
+                'success' => true,
+                'message' => __('offer.updated'),
+                'errors' => [],
+                'data' => $offer,
+            ], Response::HTTP_OK);
         } else {
-            return response()->json(['message' => 'Offer not found'], Response::HTTP_NOT_FOUND);
+            return response()->json([
+                'success' => false,
+                'message' => __('offer.not_found'),
+                'errors' => [],
+                'data' => [],
+            ], Response::HTTP_NOT_FOUND);
         }
     }
 
@@ -187,9 +281,19 @@ class OfferController extends Controller
         if ($offer) {
             $offer->delete();
 
-            return response()->json(['message' => 'Offer disabled successfully'], Response::HTTP_OK); // or 204
+            return response()->json([
+                'success' => true,
+                'message' => __('offer.disabled'),
+                'errors' => [],
+                'data' => [],
+            ], Response::HTTP_OK); // or 204
         } else {
-            return response()->json(['message' => 'Offer not found'], Response::HTTP_NOT_FOUND);
+            return response()->json([
+                'success' => false,
+                'message' => __('offer.not_found'),
+                'errors' => [],
+                'data' => [],
+            ], Response::HTTP_NOT_FOUND);
         }
     }
 
@@ -201,7 +305,24 @@ class OfferController extends Controller
     public function trashed()
     {
         $offers = Offer::onlyTrashed()->get();
-        return response()->json($offers);
+
+        if ($offers->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => __('offer.disabled_records_err'),
+                'errors' => [],
+                'data' => [],
+            ], Response::HTTP_NOT_FOUND);
+        } else {
+            return response()->json([
+                'success' => true,
+                'message' => __('offer.disabled_records'),
+                'errors' => [],
+                'data' => $offers,
+            ], Response::HTTP_OK);
+        }
+
+
     }
 
     /**
@@ -215,9 +336,20 @@ class OfferController extends Controller
 
         if ($offer) {
             $offer->restore();
-            return response()->json(['message' => 'Offer restored successfully'], Response::HTTP_OK);
+
+            return response()->json([
+                'success' => true,
+                'message' => __('offer.restored'),
+                'errors' => [],
+                'data' => [],
+            ], Response::HTTP_OK);
         } else {
-            return response()->json(['message' => 'Offer not found'], Response::HTTP_NOT_FOUND);
+            return response()->json([
+                'success' => false,
+                'message' => __('offer.not_found'),
+                'errors' => [],
+                'data' => [],
+            ], Response::HTTP_NOT_FOUND);
         }
     }
 
@@ -239,9 +371,71 @@ class OfferController extends Controller
 
             $offer->forceDelete();
 
-            return response()->json(['message' => 'Offer deleted permanently.'], Response::HTTP_OK);
+            return response()->json([
+                'success' => true,
+                'message' => __('offer.deleted'),
+                'errors' => [],
+                'data' => [],
+            ], Response::HTTP_OK);
         } else {
-            return response()->json(['message' => 'Offer not found'], Response::HTTP_NOT_FOUND);
+            return response()->json([
+                'success' => false,
+                'message' => __('offer.not_found'),
+                'errors' => [],
+                'data' => [],
+            ], Response::HTTP_NOT_FOUND);
+        }
+    }
+
+    /**
+     * GET /api/admin/offers
+     *
+     * Display a listing of offers (only non-deleted ones)
+     */
+    public function getAvailableOffers()
+    {
+        $offers = Offer::withoutTrashed()->get();
+
+        if ($offers->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => __('offer.all_records_err'),
+                'errors' => [],
+                'data' => [],
+            ], Response::HTTP_NOT_FOUND);
+        } else {
+            return response()->json([
+                'success' => true,
+                'message' => __('offer.all_records_err'),
+                'errors' => [],
+                'data' => $offers,
+            ], Response::HTTP_OK);
+        }
+    }
+
+    /**
+     * GET /api/admin/offers/{offer}
+     *
+     * Display a specific offer
+     */
+    public function getSingleOffer($id)
+    {
+        $offer = Offer::withoutTrashed()->find($id);
+
+        if ($offer) {
+            return response()->json([
+                'success' => true,
+                'message' => __('offer.found'),
+                'errors' => [],
+                'data' => $offer,
+            ], Response::HTTP_OK);
+        } else {
+            return response()->json([
+                'success' => false,
+                'message' => __('offer.not_found'),
+                'errors' => [],
+                'data' => [],
+            ], Response::HTTP_NOT_FOUND);
         }
     }
 
@@ -258,7 +452,12 @@ class OfferController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return response()->json($validator->errors(), 400);
+            return response()->json([
+                'success' => false,
+                'message' => __('offer.failed'),
+                'errors' => $validator->errors(),
+                'data' => [],
+            ], Response::HTTP_BAD_REQUEST);
         }
 
         $latitude = $request['latitude'];
@@ -287,6 +486,20 @@ class OfferController extends Controller
         ->get();
 
         // Return the stores as a JSON response
-        return response()->json($offers, Response::HTTP_OK);
+        if (!$offers) {
+            return response()->json([
+                'success' => false,
+                'message' => __('offer.nearby_records_err'),
+                'errors' => [],
+                'data' => [],
+            ], Response::HTTP_NOT_FOUND);
+        } else {
+            return response()->json([
+                'success' => true,
+                'message' => __('offer.nearby_records'),
+                'errors' => [],
+                'data' => $offers,
+            ], Response::HTTP_OK);
+        }
     }
 }

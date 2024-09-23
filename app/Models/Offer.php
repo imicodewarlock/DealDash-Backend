@@ -47,4 +47,9 @@ class Offer extends Model
     {
         return $this->belongsTo(Store::class);
     }
+
+    public function notifications()
+    {
+        return $this->hasMany(OfferNotification::class);
+    }
 }

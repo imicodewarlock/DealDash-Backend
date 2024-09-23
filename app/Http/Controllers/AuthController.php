@@ -30,7 +30,12 @@ class AuthController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return response()->json($validator->errors(), Response::HTTP_BAD_REQUEST);
+            return response()->json([
+                'success' => false,
+                'message' => null,
+                'errors' => $validator->errors(),
+                'data' => [],
+            ], Response::HTTP_BAD_REQUEST);
         }
 
         $avatarUrl = null;
@@ -61,9 +66,14 @@ class AuthController extends Controller
         $token = $this->jwtService->createToken($user);
 
         return response()->json([
-            'user' => $user,
-            'token' => $token->toString(),
-        ]);
+            'success' => true,
+            'message' => __('auth.signed_up'),
+            'errors' => [],
+            'data' => [
+                'user' => $user,
+                'token' => $token->toString(),
+            ],
+        ], Response::HTTP_OK);
     }
 
     public function login(Request $request)
@@ -74,21 +84,45 @@ class AuthController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return response()->json($validator->errors(), Response::HTTP_BAD_REQUEST);
+            return response()->json([
+                'success' => false,
+                'message' => null,
+                'errors' => $validator->errors(),
+                'data' => [],
+            ], Response::HTTP_BAD_REQUEST);
         }
 
         $user = User::where('email', $request->email)->first();
 
-        if (!$user || !Hash::check($request->password, $user->password)) {
-            return response()->json(['message' => 'Invalid credentials'], Response::HTTP_UNAUTHORIZED);
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => __('auth.failed'),
+                'errors' => [],
+                'data' => [],
+            ], Response::HTTP_UNAUTHORIZED);
+        }
+
+        if (!Hash::check($request->password, $user->password)) {
+            return response()->json([
+                'success' => false,
+                'message' => __('auth.password'),
+                'errors' => [],
+                'data' => [],
+            ], Response::HTTP_UNAUTHORIZED);
         }
 
         $token = $this->jwtService->createToken($user);
 
         return response()->json([
-            'user' => $user,
-            'token' => $token->toString(),
-        ]);
+            'success' => true,
+            'message' => __('auth.signed_in'),
+            'errors' => [],
+            'data' => [
+                'user' => $user,
+                'token' => $token->toString(),
+            ],
+        ], Response::HTTP_OK);
     }
 
     public function logout(Request $request)
@@ -100,6 +134,11 @@ class AuthController extends Controller
             'token' => $token,
         ]);
 
-        return response()->json(['message' => 'Successfully logged out']);
+        return response()->json([
+            'success' => true,
+            'message' => __('auth.signed_out'),
+            'errors' => [],
+            'data' => [],
+        ], Response::HTTP_OK);
     }
 }
