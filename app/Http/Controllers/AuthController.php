@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use App\Services\JWTService;
+use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\Response;
 
 class AuthController extends Controller
@@ -32,27 +33,39 @@ class AuthController extends Controller
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
-                'message' => null,
+                'message' => __('auth.failed'),
                 'errors' => $validator->errors(),
                 'data' => [],
             ], Response::HTTP_BAD_REQUEST);
         }
 
         $avatarUrl = null;
+        // if ($request->hasFile('avatar')) {
+        //     // Define the path where the image will be stored
+        //     $destinationPath = public_path('img/avatars');
+
+        //     // Check if the directory exists, if not, create it
+        //     if (!File::exists($destinationPath)) {
+        //         File::makeDirectory($destinationPath, 0755, true); // Create the directory with the correct permissions
+        //     }
+
+        //     $avatar = $request->file('avatar');
+
+        //     // Generate a unique filename
+        //     $avatarName = time() . '_' . uniqid() . '.' . $avatar->getClientOriginalExtension();
+
+        //     // Move the image to the destination path
+        //     $avatar->move($destinationPath, $avatarName);
+
+        //     // Generate the full URL to the image
+        //     $avatarUrl = config('app.url') . '/img/avatars/' . $avatarName;
+        // }
+
         if ($request->hasFile('avatar')) {
             $avatar = $request->file('avatar');
-
-            // Generate a unique filename
             $avatarName = time() . '_' . uniqid() . '.' . $avatar->getClientOriginalExtension();
-
-            // Define the path where the image will be stored
-            $destinationPath = public_path('img/avatars');
-
-            // Move the image to the destination path
-            $avatar->move($destinationPath, $avatarName);
-
-            // Generate the full URL to the image
-            $avatarUrl = config('app.url') . '/img/avatars/' . $avatarName;
+            $avatar->storeAs('img/avatars/', $avatarName, 's3');
+            $avatarUrl = Storage::disk('s3')->url('img/avatars/' . $avatarName);
         }
 
         $user = User::create([

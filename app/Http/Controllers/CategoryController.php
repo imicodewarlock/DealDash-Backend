@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Category;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -59,25 +60,32 @@ class CategoryController extends Controller
         }
 
         $imageUrl = null;
+        // if ($request->hasFile('image')) {
+        //     // Define the path where the image will be stored
+        //     $destinationPath = public_path('img/categories');
+
+        //     // Check if the directory exists, if not, create it
+        //     if (!File::exists($destinationPath)) {
+        //         File::makeDirectory($destinationPath, 0755, true); // Create the directory with the correct permissions
+        //     }
+
+        //     $image = $request->file('image');
+
+        //     // Generate a unique filename
+        //     $imageName = time() . '_' . uniqid() . '.' . $image->getClientOriginalExtension();
+
+        //     // Move the image to the destination path
+        //     $image->move($destinationPath, $imageName);
+
+        //     // Generate the full URL to the image
+        //     $imageUrl = config('app.url') . '/img/categories/' . $imageName;
+        // }
+
         if ($request->hasFile('image')) {
-            // Define the path where the image will be stored
-            $destinationPath = public_path('img/categories');
-
-            // Check if the directory exists, if not, create it
-            if (!File::exists($destinationPath)) {
-                File::makeDirectory($destinationPath, 0755, true); // Create the directory with the correct permissions
-            }
-
             $image = $request->file('image');
-
-            // Generate a unique filename
             $imageName = time() . '_' . uniqid() . '.' . $image->getClientOriginalExtension();
-
-            // Move the image to the destination path
-            $image->move($destinationPath, $imageName);
-
-            // Generate the full URL to the image
-            $imageUrl = config('app.url') . '/img/categories/' . $imageName;
+            $image->storeAs('img/categories/', $imageName, 's3');
+            $imageUrl = Storage::disk('s3')->url('img/categories/' . $imageName);
         }
 
         $category = Category::create([
@@ -145,24 +153,55 @@ class CategoryController extends Controller
 
             $category->name = $request->name ?? $category->name;
 
+            $imageUrl = null;
+
+            // if ($request->hasFile('image')) {
+            //     // Define the path where the image will be stored
+            //     $destinationPath = public_path('img/categories');
+
+            //     // Check if the directory exists, if not, create it
+            //     if (!File::exists($destinationPath)) {
+            //         File::makeDirectory($destinationPath, 0755, true); // Create the directory with the correct permissions
+            //     }
+
+            //     // first unlink the old avatar
+            //     if ($category->image) {
+            //         $parsedUrl = parse_url($category->image);
+            //         $oldImage = basename($parsedUrl['path']);
+
+            //         if (File::exists("{$destinationPath}/{$oldImage}")) {
+            //             // unlink(public_path('img/categories') . '/' . $oldImage);
+            //             unlink("{$destinationPath}/{$oldImage}");
+            //         }
+            //     }
+
+            //     // Next Update the avatar
+            //     $image = $request->file('image');
+
+            //     // Generate a unique filename
+            //     $imageName = time() . '_' . uniqid() . '.' . $image->getClientOriginalExtension();
+
+            //     // Move the image to the destination path
+            //     $image->move($destinationPath, $imageName);
+
+            //     // Generate the full URL to the image
+            //     $imageUrl = config('app.url') . '/img/categories/' . $imageName;
+
+            //     $category->image = $imageUrl ?? $category->image;
+            // }
+
             if ($request->hasFile('image')) {
-                // Define the path where the image will be stored
-                $destinationPath = public_path('img/categories');
-
-                // Check if the directory exists, if not, create it
-                if (!File::exists($destinationPath)) {
-                    File::makeDirectory($destinationPath, 0755, true); // Create the directory with the correct permissions
-                }
-
                 // first unlink the old avatar
                 if ($category->image) {
-                    $parsedUrl = parse_url($category->image);
-                    $oldImage = basename($parsedUrl['path']);
+                    // Extract the S3 path from the avatar URL
+                    $oldImagePath = parse_url($category->image, PHP_URL_PATH);
+                    $oldImagePath = ltrim($oldImagePath, '/'); // Remove leading slash
 
-                    if (File::exists("{$destinationPath}/{$oldImage}")) {
-                        // unlink(public_path('img/categories') . '/' . $oldImage);
-                        unlink("{$destinationPath}/{$oldImage}");
-                    }
+                    // if (Storage::disk('s3')->exists($oldImagePath)) {
+                    //     Storage::disk('s3')->delete($oldImagePath);
+                    // }
+
+                    Storage::disk('s3')->delete($oldImagePath);
                 }
 
                 // Next Update the avatar
@@ -171,14 +210,13 @@ class CategoryController extends Controller
                 // Generate a unique filename
                 $imageName = time() . '_' . uniqid() . '.' . $image->getClientOriginalExtension();
 
-                // Move the image to the destination path
-                $image->move($destinationPath, $imageName);
+                $image->storeAs('img/categories/', $imageName, 's3');
 
                 // Generate the full URL to the image
-                $imageUrl = config('app.url') . '/img/categories/' . $imageName;
-
-                $category->image = $imageUrl ?? $category->image;
+                $imageUrl = Storage::disk('s3')->url('img/categories/' . $imageName);
             }
+
+            $category->image = $imageUrl ?? $category->image;
 
             $category->update();
 
@@ -290,10 +328,22 @@ class CategoryController extends Controller
         $category = Category::onlyTrashed()->find($id);
 
         if ($category) {
+            // if ($category->image) {
+            //     $parsedUrl = parse_url($category->image);
+            //     $oldImage = basename($parsedUrl['path']);
+            //     unlink(public_path('img/categories') . '/' . $oldImage);
+            // }
+
             if ($category->image) {
-                $parsedUrl = parse_url($category->image);
-                $oldImage = basename($parsedUrl['path']);
-                unlink(public_path('img/categories') . '/' . $oldImage);
+                // Extract the S3 path from the avatar URL
+                $oldImagePath = parse_url($category->image, PHP_URL_PATH);
+                $oldImagePath = ltrim($oldImagePath, '/'); // Remove leading slash
+
+                // if (Storage::disk('s3')->exists($oldImagePath)) {
+                //     Storage::disk('s3')->delete($oldImagePath);
+                // }
+
+                Storage::disk('s3')->delete($oldImagePath);
             }
 
             $category->forceDelete();

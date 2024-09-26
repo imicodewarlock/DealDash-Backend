@@ -9,6 +9,7 @@ use App\Services\FCMService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -78,25 +79,32 @@ class OfferController extends Controller
         }
 
         $imageUrl = null;
+        // if ($request->hasFile('image')) {
+        //     // Define the path where the image will be stored
+        //     $destinationPath = public_path('img/offers');
+
+        //     // Check if the directory exists, if not, create it
+        //     if (!File::exists($destinationPath)) {
+        //         File::makeDirectory($destinationPath, 0755, true); // Create the directory with the correct permissions
+        //     }
+
+        //     $image = $request->file('image');
+
+        //     // Generate a unique filename
+        //     $imageName = time() . '_' . uniqid() . '.' . $image->getClientOriginalExtension();
+
+        //     // Move the image to the destination path
+        //     $image->move($destinationPath, $imageName);
+
+        //     // Generate the full URL to the image
+        //     $imageUrl = config('app.url') . '/img/offers/' . $imageName;
+        // }
+
         if ($request->hasFile('image')) {
-            // Define the path where the image will be stored
-            $destinationPath = public_path('img/offers');
-
-            // Check if the directory exists, if not, create it
-            if (!File::exists($destinationPath)) {
-                File::makeDirectory($destinationPath, 0755, true); // Create the directory with the correct permissions
-            }
-
             $image = $request->file('image');
-
-            // Generate a unique filename
             $imageName = time() . '_' . uniqid() . '.' . $image->getClientOriginalExtension();
-
-            // Move the image to the destination path
-            $image->move($destinationPath, $imageName);
-
-            // Generate the full URL to the image
-            $imageUrl = config('app.url') . '/img/offers/' . $imageName;
+            $image->storeAs('img/offers/', $imageName, 's3');
+            $imageUrl = Storage::disk('s3')->url('img/offers/' . $imageName);
         }
 
         $offer = Offer::create([
@@ -217,24 +225,54 @@ class OfferController extends Controller
             $offer->start_date = $request->start_date ?? $offer->start_date;
             $offer->end_date = $request->end_date ?? $offer->end_date;
 
+            $imageUrl = null;
+            // if ($request->hasFile('image')) {
+            //     // Define the path where the image will be stored
+            //     $destinationPath = public_path('img/offers');
+
+            //     // Check if the directory exists, if not, create it
+            //     if (!File::exists($destinationPath)) {
+            //         File::makeDirectory($destinationPath, 0755, true); // Create the directory with the correct permissions
+            //     }
+
+            //     // first unlink the old avatar
+            //     if ($offer->image) {
+            //         $parsedUrl = parse_url($offer->image);
+            //         $oldImage = basename($parsedUrl['path']);
+
+            //         if (File::exists("{$destinationPath}/{$oldImage}")) {
+            //             // unlink(public_path('img/categories') . '/' . $oldImage);
+            //             unlink("{$destinationPath}/{$oldImage}");
+            //         }
+            //     }
+
+            //     // Next Update the avatar
+            //     $image = $request->file('image');
+
+            //     // Generate a unique filename
+            //     $imageName = time() . '_' . uniqid() . '.' . $image->getClientOriginalExtension();
+
+            //     // Move the image to the destination path
+            //     $image->move($destinationPath, $imageName);
+
+            //     // Generate the full URL to the image
+            //     $imageUrl = config('app.url') . '/img/offers/' . $imageName;
+
+            //     $offer->image = $imageUrl ?? $offer->image;
+            // }
+
             if ($request->hasFile('image')) {
-                // Define the path where the image will be stored
-                $destinationPath = public_path('img/offers');
-
-                // Check if the directory exists, if not, create it
-                if (!File::exists($destinationPath)) {
-                    File::makeDirectory($destinationPath, 0755, true); // Create the directory with the correct permissions
-                }
-
                 // first unlink the old avatar
                 if ($offer->image) {
-                    $parsedUrl = parse_url($offer->image);
-                    $oldImage = basename($parsedUrl['path']);
+                    // Extract the S3 path from the avatar URL
+                    $oldImagePath = parse_url($offer->image, PHP_URL_PATH);
+                    $oldImagePath = ltrim($oldImagePath, '/'); // Remove leading slash
 
-                    if (File::exists("{$destinationPath}/{$oldImage}")) {
-                        // unlink(public_path('img/categories') . '/' . $oldImage);
-                        unlink("{$destinationPath}/{$oldImage}");
-                    }
+                    // if (Storage::disk('s3')->exists($oldImagePath)) {
+                    //     Storage::disk('s3')->delete($oldImagePath);
+                    // }
+
+                    Storage::disk('s3')->delete($oldImagePath);
                 }
 
                 // Next Update the avatar
@@ -243,14 +281,13 @@ class OfferController extends Controller
                 // Generate a unique filename
                 $imageName = time() . '_' . uniqid() . '.' . $image->getClientOriginalExtension();
 
-                // Move the image to the destination path
-                $image->move($destinationPath, $imageName);
+                $image->storeAs('img/offers/', $imageName, 's3');
 
                 // Generate the full URL to the image
-                $imageUrl = config('app.url') . '/img/offers/' . $imageName;
-
-                $offer->image = $imageUrl ?? $offer->image;
+                $imageUrl = Storage::disk('s3')->url('img/offers/' . $imageName);
             }
+
+            $offer->image = $imageUrl ?? $offer->image;
 
             $offer->update();
             return response()->json([
@@ -363,10 +400,22 @@ class OfferController extends Controller
         $offer = Offer::onlyTrashed()->find($id);
 
         if ($offer) {
+            // if ($offer->image) {
+            //     $parsedUrl = parse_url($offer->image);
+            //     $oldImage = basename($parsedUrl['path']);
+            //     unlink(public_path('img/offers') . '/' . $oldImage);
+            // }
+
             if ($offer->image) {
-                $parsedUrl = parse_url($offer->image);
-                $oldImage = basename($parsedUrl['path']);
-                unlink(public_path('img/offers') . '/' . $oldImage);
+                // Extract the S3 path from the avatar URL
+                $oldImagePath = parse_url($offer->image, PHP_URL_PATH);
+                $oldImagePath = ltrim($oldImagePath, '/'); // Remove leading slash
+
+                // if (Storage::disk('s3')->exists($oldImagePath)) {
+                //     Storage::disk('s3')->delete($oldImagePath);
+                // }
+
+                Storage::disk('s3')->delete($oldImagePath);
             }
 
             $offer->forceDelete();

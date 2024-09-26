@@ -6,6 +6,7 @@ use App\Models\Store;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -66,25 +67,32 @@ class StoreController extends Controller
         }
 
         $imageUrl = null;
+        // if ($request->hasFile('image')) {
+        //     // Define the path where the image will be stored
+        //     $destinationPath = public_path('img/stores');
+
+        //     // Check if the directory exists, if not, create it
+        //     if (!File::exists($destinationPath)) {
+        //         File::makeDirectory($destinationPath, 0755, true); // Create the directory with the correct permissions
+        //     }
+
+        //     $image = $request->file('image');
+
+        //     // Generate a unique filename
+        //     $imageName = time() . '_' . uniqid() . '.' . $image->getClientOriginalExtension();
+
+        //     // Move the image to the destination path
+        //     $image->move($destinationPath, $imageName);
+
+        //     // Generate the full URL to the image
+        //     $imageUrl = config('app.url') . '/img/stores/' . $imageName;
+        // }
+
         if ($request->hasFile('image')) {
-            // Define the path where the image will be stored
-            $destinationPath = public_path('img/stores');
-
-            // Check if the directory exists, if not, create it
-            if (!File::exists($destinationPath)) {
-                File::makeDirectory($destinationPath, 0755, true); // Create the directory with the correct permissions
-            }
-
             $image = $request->file('image');
-
-            // Generate a unique filename
             $imageName = time() . '_' . uniqid() . '.' . $image->getClientOriginalExtension();
-
-            // Move the image to the destination path
-            $image->move($destinationPath, $imageName);
-
-            // Generate the full URL to the image
-            $imageUrl = config('app.url') . '/img/stores/' . $imageName;
+            $image->storeAs('img/stores/', $imageName, 's3');
+            $imageUrl = Storage::disk('s3')->url('img/stores/' . $imageName);
         }
 
         $store = Store::create([
@@ -170,24 +178,54 @@ class StoreController extends Controller
             $store->latitude = $request->latitude ?? $store->latitude;
             $store->longitude = $request->longitude ?? $store->longitude;
 
+            $imageUrl = null;
+            // if ($request->hasFile('image')) {
+            //     // Define the path where the image will be stored
+            //     $destinationPath = public_path('img/stores');
+
+            //     // Check if the directory exists, if not, create it
+            //     if (!File::exists($destinationPath)) {
+            //         File::makeDirectory($destinationPath, 0755, true); // Create the directory with the correct permissions
+            //     }
+
+            //     // first unlink the old avatar
+            //     if ($store->image) {
+            //         $parsedUrl = parse_url($store->image);
+            //         $oldImage = basename($parsedUrl['path']);
+
+            //         if (File::exists("{$destinationPath}/{$oldImage}")) {
+            //             // unlink(public_path('img/categories') . '/' . $oldImage);
+            //             unlink("{$destinationPath}/{$oldImage}");
+            //         }
+            //     }
+
+            //     // Next Update the avatar
+            //     $image = $request->file('image');
+
+            //     // Generate a unique filename
+            //     $imageName = time() . '_' . uniqid() . '.' . $image->getClientOriginalExtension();
+
+            //     // Move the image to the destination path
+            //     $image->move($destinationPath, $imageName);
+
+            //     // Generate the full URL to the image
+            //     $imageUrl = config('app.url') . '/img/stores/' . $imageName;
+
+            //     $store->image = $imageUrl ?? $store->image;
+            // }
+
             if ($request->hasFile('image')) {
-                // Define the path where the image will be stored
-                $destinationPath = public_path('img/stores');
-
-                // Check if the directory exists, if not, create it
-                if (!File::exists($destinationPath)) {
-                    File::makeDirectory($destinationPath, 0755, true); // Create the directory with the correct permissions
-                }
-
                 // first unlink the old avatar
                 if ($store->image) {
-                    $parsedUrl = parse_url($store->image);
-                    $oldImage = basename($parsedUrl['path']);
+                    // Extract the S3 path from the avatar URL
+                    $oldImagePath = parse_url($store->image, PHP_URL_PATH);
+                    $oldImagePath = ltrim($oldImagePath, '/'); // Remove leading slash
 
-                    if (File::exists("{$destinationPath}/{$oldImage}")) {
-                        // unlink(public_path('img/categories') . '/' . $oldImage);
-                        unlink("{$destinationPath}/{$oldImage}");
-                    }
+                    // if (Storage::disk('s3')->exists($oldImagePath)) {
+                    //     Storage::disk('s3')->delete($oldImagePath);
+                    // }
+
+                    Storage::disk('s3')->delete($oldImagePath);
                 }
 
                 // Next Update the avatar
@@ -196,14 +234,13 @@ class StoreController extends Controller
                 // Generate a unique filename
                 $imageName = time() . '_' . uniqid() . '.' . $image->getClientOriginalExtension();
 
-                // Move the image to the destination path
-                $image->move($destinationPath, $imageName);
+                $image->storeAs('img/stores/', $imageName, 's3');
 
                 // Generate the full URL to the image
-                $imageUrl = config('app.url') . '/img/stores/' . $imageName;
-
-                $store->image = $imageUrl ?? $store->image;
+                $imageUrl = Storage::disk('s3')->url('img/stores/' . $imageName);
             }
+
+            $store->image = $imageUrl ?? $store->image;
 
             $store->update();
 
@@ -314,10 +351,22 @@ class StoreController extends Controller
         $store = Store::onlyTrashed()->find($id);
 
         if ($store) {
+            // if ($store->image) {
+            //     $parsedUrl = parse_url($store->image);
+            //     $oldImage = basename($parsedUrl['path']);
+            //     unlink(public_path('img/stores') . '/' . $oldImage);
+            // }
+
             if ($store->image) {
-                $parsedUrl = parse_url($store->image);
-                $oldImage = basename($parsedUrl['path']);
-                unlink(public_path('img/stores') . '/' . $oldImage);
+                // Extract the S3 path from the avatar URL
+                $oldImagePath = parse_url($store->image, PHP_URL_PATH);
+                $oldImagePath = ltrim($oldImagePath, '/'); // Remove leading slash
+
+                // if (Storage::disk('s3')->exists($oldImagePath)) {
+                //     Storage::disk('s3')->delete($oldImagePath);
+                // }
+
+                Storage::disk('s3')->delete($oldImagePath);
             }
 
             $store->forceDelete();
