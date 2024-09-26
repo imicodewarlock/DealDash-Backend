@@ -125,7 +125,8 @@ class OfferController extends Controller
                     ->whereNotNull('fcm_token')
                     ->get();
 
-        if (!isEmpty($users)) {
+        // if (!isEmpty($users)) {
+        if ($users) {
             // Push notification to each user
             foreach ($users as $user) {
                 OfferNotification::create([
