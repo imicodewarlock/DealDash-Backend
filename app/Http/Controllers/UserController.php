@@ -232,7 +232,7 @@ class UserController extends Controller
                 $avatarUrl = Storage::disk('s3')->url('img/avatars/' . $avatarName);
             }
 
-            $user->image = $avatarUrl ?? $user->image;
+            $user->image = $avatarUrl ?? $user->avatar;
 
             $user->update();
 
