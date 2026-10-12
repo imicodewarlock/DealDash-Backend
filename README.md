@@ -1,8 +1,8 @@
 <div align="center">
 
-# 🛒 DealDash v2 - Backend API (Laravel)
+# 🛒 DealDash - Backend API (Laravel)
 
-> **DealDash v2** is the robust backend RESTful API service built with **Laravel** for the **DealDash** mobile application — a feature-rich e-commerce / deal-finding platform created as our **Graduation Project**.
+> **DealDash-Backend** is the robust backend RESTful API service built with **Laravel** for the **DealDash** mobile application — a feature-rich e-commerce / deal-finding platform created as our **Graduation Project**.
 
 📱 **Mobile App Repository:** [DealDash Mobile App (Flutter)](https://github.com/karimelsayed24/DealDash)
 
@@ -55,8 +55,8 @@ Follow these steps to set up and run the Laravel backend locally.
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/imicodewarlock/deal-dash-v2.git
-   cd deal-dash-v2
+   git clone https://github.com/imicodewarlock/DealDash-Backend.git
+   cd DealDash-Backend
    ```
 
 2. **Install PHP Dependencies:**
